@@ -200,7 +200,8 @@ class RotatedStandardRoIHead(BaseModule, metaclass=ABCMeta):
                                                   gt_labels, self.train_cfg)
         loss_bbox = self.bbox_head.loss(bbox_results['cls_score'],
                                         bbox_results['bbox_pred'], rois,
-                                        *bbox_targets)
+                                        *bbox_targets,
+                                        bbox_feats=bbox_results['bbox_feats'])
 
         bbox_results.update(loss_bbox=loss_bbox)
         return bbox_results
@@ -281,7 +282,8 @@ class RotatedStandardRoIHead(BaseModule, metaclass=ABCMeta):
                 Default: False.
 
         Returns:
-            tuple[list[Tensor], list[Tensor]]: The first list contains \
+            tuple[list[Tensor], list[Tensor]]: The first list con
+            tains \
                 the boxes of the corresponding image in a batch, each \
                 tensor has the shape (num_boxes, 5) and last dimension \
                 5 represent (tl_x, tl_y, br_x, br_y, score). Each Tensor \

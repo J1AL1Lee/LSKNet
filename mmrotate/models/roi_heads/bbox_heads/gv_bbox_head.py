@@ -352,7 +352,8 @@ class GVBBoxHead(BaseModule):
              fix_weights,
              ratio_targets,
              ratio_weights,
-             reduction_override=None):
+             reduction_override=None,
+             bbox_feats=None):
         """Loss function.
 
         Args:

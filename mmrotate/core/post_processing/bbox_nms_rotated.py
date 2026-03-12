@@ -44,6 +44,10 @@ def multiclass_nms_rotated(multi_bboxes,
     bboxes = bboxes.reshape(-1, 5)
     scores = scores.reshape(-1)
     labels = labels.reshape(-1)
+    if scores.device != bboxes.device:
+        scores = scores.to(bboxes.device)
+    if labels.device != bboxes.device:
+        labels = labels.to(bboxes.device)
 
     # remove low scoring boxes
     valid_mask = scores > score_thr

@@ -248,7 +248,8 @@ class RotatedKFIoUShared2FCBBoxHead(RotatedConvFCBBoxHead):
              label_weights,
              bbox_targets,
              bbox_weights,
-             reduction_override=None):
+             reduction_override=None,
+             bbox_feats=None):
         """Loss function."""
         losses = dict()
         if cls_score is not None:

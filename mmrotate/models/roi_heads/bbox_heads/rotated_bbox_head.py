@@ -58,6 +58,7 @@ class RotatedBBoxHead(BaseModule):
                      loss_weight=1.0),
                  loss_bbox=dict(
                      type='SmoothL1Loss', beta=1.0, loss_weight=1.0),
+                 clip_cfg=None,
                  init_cfg=None):
         super(RotatedBBoxHead, self).__init__(init_cfg)
         assert with_cls or with_reg
@@ -73,6 +74,8 @@ class RotatedBBoxHead(BaseModule):
         self.reg_predictor_cfg = reg_predictor_cfg
         self.cls_predictor_cfg = cls_predictor_cfg
         self.fp16_enabled = False
+        self.clip_cfg = clip_cfg or {}
+        self.clip_enabled = bool(self.clip_cfg.get('enable', False))
 
         self.bbox_coder = build_bbox_coder(bbox_coder)
         self.loss_cls = build_loss(loss_cls)
@@ -99,6 +102,17 @@ class RotatedBBoxHead(BaseModule):
                 self.reg_predictor_cfg,
                 in_features=in_channels,
                 out_features=out_dim_reg)
+        if self.clip_enabled:
+            clip_path = self.clip_cfg.get('text_embed_path')
+            if not clip_path:
+                raise ValueError('clip_cfg.text_embed_path is required')
+            text_embed = torch.load(clip_path, map_location='cpu')
+            if text_embed.dim() == 1:
+                text_embed = text_embed.unsqueeze(0)
+            text_embed = F.normalize(text_embed.float(), dim=-1)
+            self.register_buffer('clip_text_embed', text_embed)
+            self.clip_loss_weight = float(self.clip_cfg.get('loss_weight', 0.1))
+            self.clip_proj = nn.Linear(self.in_channels, text_embed.size(1))
         self.debug_imgs = None
         if init_cfg is None:
             self.init_cfg = []
@@ -280,7 +294,8 @@ class RotatedBBoxHead(BaseModule):
              label_weights,
              bbox_targets,
              bbox_weights,
-             reduction_override=None):
+             reduction_override=None,
+             bbox_feats=None):
         """Loss function.
 
         Args:
@@ -352,7 +367,27 @@ class RotatedBBoxHead(BaseModule):
                     reduction_override=reduction_override)
             else:
                 losses['loss_bbox'] = bbox_pred[pos_inds].sum()
+        if self.clip_enabled:
+            losses['loss_clip'] = self._clip_loss(bbox_feats, labels)
         return losses
+
+    def _clip_loss(self, bbox_feats, labels):
+        if bbox_feats is None:
+            raise ValueError('bbox_feats is required when clip is enabled')
+        bg_class_ind = self.num_classes
+        pos_inds = (labels >= 0) & (labels < bg_class_ind)
+        if not pos_inds.any():
+            return bbox_feats.sum() * 0.0
+        feats = bbox_feats[pos_inds]
+        if feats.dim() == 4:
+            feats = F.adaptive_avg_pool2d(feats, 1).flatten(1)
+        else:
+            feats = feats.flatten(1)
+        img_embed = self.clip_proj(feats)
+        img_embed = F.normalize(img_embed, dim=-1)
+        text_embed = self.clip_text_embed[labels[pos_inds]].to(img_embed.dtype)
+        cos_sim = (img_embed * text_embed).sum(dim=-1)
+        return (1.0 - cos_sim).mean() * self.clip_loss_weight
 
     @force_fp32(apply_to=('cls_score', 'bbox_pred'))
     def get_bboxes(self,

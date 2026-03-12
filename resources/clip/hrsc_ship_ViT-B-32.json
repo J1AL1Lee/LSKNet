@@ -1,0 +1,14 @@
+{
+  "dataset": "HRSC2016",
+  "classwise": false,
+  "classes": [
+    "ship"
+  ],
+  "template": "a {cls_name} in an aerial image",
+  "model": "ViT-B/32",
+  "embedding_shape": [
+    1,
+    512
+  ],
+  "normalized": true
+}
